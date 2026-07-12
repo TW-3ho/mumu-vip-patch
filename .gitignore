@@ -1,0 +1,5 @@
+*
+!/.gitignore
+!/README.md
+!/auto-patch-mumu.py
+!/start-mumu-patched.cmd
