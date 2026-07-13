@@ -2,4 +2,7 @@
 !/.gitignore
 !/README.md
 !/auto-patch-mumu.py
+!/mumu-vip-manifest.json
 !/start-mumu-patched.cmd
+!/tests/
+!/tests/test_auto_patch_mumu.py
