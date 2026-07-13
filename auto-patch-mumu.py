@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Version-locked direct EXE patch helper for the local MuMuPlayer crackme.
 
-The tool only operates on the current local MuMuPlayer install paths listed in
-mumu-vip-manifest.json. It performs exact byte-state checks before any write and
-uses timestamped backups for reversible changes.
+Targets are bound to an install root (default H:\\MuMuPlayer) via --root while
+keeping exact hash/byte gates from mumu-vip-manifest.json. Writes fail closed and
+use timestamped backups under <root>\\_ad_vip_tools\\backups\\direct-exe.
 """
 
 from __future__ import annotations
@@ -25,18 +25,45 @@ from typing import Any, Callable, Iterable
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 DEFAULT_MANIFEST = PACKAGE_DIR / "mumu-vip-manifest.json"
-BACKUP_ROOT = Path(r"H:\MuMuPlayer\_ad_vip_tools\backups\direct-exe")
+DEFAULT_INSTALL_ROOT = Path(r"H:\MuMuPlayer")
 FORBIDDEN_PATH_MARKER = "mumuplayerglobal"
 CHUNK_SIZE = 1024 * 1024
 EXPECTED_OFFICIAL_MANIFEST_SHA256 = "C894DB7F607B6E70F696D6C1B3128F99B44BE371D99B379C70B38BC090E2165D"
 FILE_ATTRIBUTE_REPARSE_POINT = 0x400
 SAFE_PROCESS_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+\.exe$")
 SHA256_RE = re.compile(r"^[A-Fa-f0-9]{64}$")
-OFFICIAL_TOPOLOGY = {
-    "main": (Path(r"H:\MuMuPlayer\nx_main\MuMuNxMain.exe"), "MuMuNxMain.exe"),
-    "service": (Path(r"H:\MuMuPlayer\nx_main\MuMuNxService.exe"), "MuMuNxService.exe"),
-    "remote": (Path(r"H:\MuMuPlayer\nx_main\MuMuRemoteService.exe"), "MuMuRemoteService.exe"),
+OFFICIAL_RELATIVE_TOPOLOGY = {
+    "main": (Path("nx_main") / "MuMuNxMain.exe", "MuMuNxMain.exe"),
+    "service": (Path("nx_main") / "MuMuNxService.exe", "MuMuNxService.exe"),
+    "remote": (Path("nx_main") / "MuMuRemoteService.exe", "MuMuRemoteService.exe"),
 }
+
+
+def official_topology_for_root(root: Path) -> dict[str, tuple[Path, str]]:
+    return {
+        key: ((root / relative).resolve(strict=False), process_name)
+        for key, (relative, process_name) in OFFICIAL_RELATIVE_TOPOLOGY.items()
+    }
+
+
+def backup_root_for(root: Path) -> Path:
+    return (root / "_ad_vip_tools" / "backups" / "direct-exe").resolve(strict=False)
+
+
+def normalize_install_root(root: Path | None = None) -> Path:
+    candidate = DEFAULT_INSTALL_ROOT if root is None else Path(root)
+    resolved = candidate.resolve(strict=False)
+    norm = normalized_path(resolved)
+    if not norm or norm.endswith(":"):
+        raise PatchError(f"invalid install root: {root}")
+    if FORBIDDEN_PATH_MARKER in norm.lower():
+        raise PatchError(f"refusing forbidden MuMuPlayerGlobal install root: {resolved}")
+    return resolved
+
+
+# Default topology for the historical install path; bind_manifest_to_root remaps for --root.
+OFFICIAL_TOPOLOGY = official_topology_for_root(DEFAULT_INSTALL_ROOT)
+BACKUP_ROOT = backup_root_for(DEFAULT_INSTALL_ROOT)
 
 
 class PatchError(RuntimeError):
@@ -286,7 +313,7 @@ def resolve_target(path: Path, manifest: Manifest) -> TargetSpec:
     return spec
 
 
-def selected_targets(args: argparse.Namespace, manifest: Manifest) -> list[TargetSpec]:
+def selected_targets(args: argparse.Namespace, manifest: Manifest, root: Path = DEFAULT_INSTALL_ROOT) -> list[TargetSpec]:
     selected_modes = sum(bool(value) for value in (args.all, args.targets, args.target))
     if selected_modes > 1:
         raise PatchError("--all, --targets, and --target are mutually exclusive")
@@ -302,30 +329,61 @@ def selected_targets(args: argparse.Namespace, manifest: Manifest) -> list[Targe
         if len(set(keys)) != len(keys):
             raise PatchError("--targets must not contain duplicate target keys")
         return [manifest.targets[key] for key in keys]
-    return [resolve_target(Path(args.target or r"H:\MuMuPlayer\nx_main\MuMuNxMain.exe"), manifest)]
+    default_main = official_topology_for_root(root)["main"][0]
+    return [resolve_target(Path(args.target or default_main), manifest)]
 
 
 def is_default_manifest_path(path: Path) -> bool:
     return normalized_path(path) == normalized_path(DEFAULT_MANIFEST)
 
 
-def enforce_official_write_topology(manifest: Manifest, targets: Iterable[TargetSpec]) -> None:
+def bind_manifest_to_root(manifest: Manifest, root: Path) -> Manifest:
+    """Remap official target paths onto install root. Digest stays pinned to raw JSON."""
+    if not is_default_manifest_path(manifest.path):
+        raise PatchError("--root requires the trusted default manifest; custom manifests are read-only")
+    root = normalize_install_root(root)
+    topology = official_topology_for_root(root)
+    if set(manifest.targets) != set(topology):
+        raise PatchError("trusted manifest target keys do not match the official write topology")
+    remapped: dict[str, TargetSpec] = {}
+    for key, spec in manifest.targets.items():
+        official_path, official_process = topology[key]
+        if spec.process_name != official_process or Path(spec.path).name != official_process:
+            raise PatchError(f"manifest target {key} process/name does not match the official write topology")
+        remapped[key] = TargetSpec(
+            key=spec.key,
+            path=official_path,
+            process_name=official_process,
+            baseline_sha256=spec.baseline_sha256,
+            patched_sha256=spec.patched_sha256,
+            entries=spec.entries,
+        )
+    return Manifest(path=manifest.path, raw=manifest.raw, targets=remapped, digest=manifest.digest)
+
+
+def enforce_official_write_topology(
+    manifest: Manifest,
+    targets: Iterable[TargetSpec],
+    root: Path = DEFAULT_INSTALL_ROOT,
+) -> None:
     if not is_default_manifest_path(manifest.path):
         raise PatchError("apply/rollback require the trusted default manifest; custom manifests are read-only")
     if manifest.digest != EXPECTED_OFFICIAL_MANIFEST_SHA256:
         raise PatchError("trusted default manifest content digest does not match the official pinned manifest")
+    root = normalize_install_root(root)
+    topology = official_topology_for_root(root)
     target_list = list(targets)
-    if set(manifest.targets) != set(OFFICIAL_TOPOLOGY):
+    if set(manifest.targets) != set(topology):
         raise PatchError("trusted manifest target keys do not match the official write topology")
     for spec in manifest.targets.values():
-        official = OFFICIAL_TOPOLOGY.get(spec.key)
+        official = topology.get(spec.key)
         if official is None:
             raise PatchError(f"target {spec.key} is not in the official write topology")
         official_path, official_process = official
         if normalized_path(spec.path) != normalized_path(official_path) or spec.process_name != official_process:
-            raise PatchError(f"manifest target {spec.key} does not match the official write topology")
+            raise PatchError(f"manifest target {spec.key} does not match the official write topology for root {root}")
     for spec in target_list:
-        if spec.key not in OFFICIAL_TOPOLOGY:
+        if spec.key not in topology:
             raise PatchError(f"selected target {spec.key} is not in the official write topology")
 
 
@@ -691,9 +749,11 @@ def command_apply(
     dry_run: bool,
     no_backup: bool = False,
     enforce_topology: bool = True,
+    root: Path = DEFAULT_INSTALL_ROOT,
 ) -> int:
     if no_backup and not dry_run:
         raise PatchError("--no-backup is not allowed for direct-EXE writes")
+    install_root = normalize_install_root(root)
     analyses: list[TargetAnalysis] = []
     patched_data: dict[str, bytes] = {}
     patched_hashes: dict[str, str] = {}
@@ -725,17 +785,17 @@ def command_apply(
         return 0
 
     if enforce_topology:
-        enforce_official_write_topology(manifest, [analysis.spec for analysis in changing])
+        enforce_official_write_topology(manifest, [analysis.spec for analysis in changing], root=install_root)
     for analysis in changing:
         require_regular_non_reparse_file(analysis.path, f"{analysis.spec.key} target")
     require_processes_stopped(analysis.spec for analysis in changing)
-    backup_dir = create_backup(unique_backup_dir(), manifest, changing, patched_hashes)
+    backup_dir = create_backup(unique_backup_dir(backup_root_for(install_root)), manifest, changing, patched_hashes)
     written: list[TargetAnalysis] = []
     try:
         for analysis in changing:
             def preflight(analysis: TargetAnalysis = analysis) -> None:
                 if enforce_topology:
-                    enforce_official_write_topology(manifest, [analysis.spec])
+                    enforce_official_write_topology(manifest, [analysis.spec], root=install_root)
                 require_regular_non_reparse_file(analysis.path, f"{analysis.spec.key} target")
                 require_processes_stopped([analysis.spec])
                 current_hash = sha256_file(analysis.path)
@@ -856,7 +916,9 @@ def command_rollback(
     manifest: Manifest,
     checker: Callable[[Iterable[TargetSpec]], list[str]] = running_target_process_names,
     enforce_topology: bool = True,
+    root: Path = DEFAULT_INSTALL_ROOT,
 ) -> int:
+    install_root = normalize_install_root(root)
     metadata_path = backup_dir / "metadata.json"
     if not metadata_path.is_file():
         raise PatchError(f"rollback metadata not found: {metadata_path}")
@@ -871,7 +933,7 @@ def command_rollback(
             key = item.get("target_key")
             if isinstance(key, str) and key in manifest.targets:
                 specs_for_topology.append(manifest.targets[key])
-        enforce_official_write_topology(manifest, specs_for_topology)
+        enforce_official_write_topology(manifest, specs_for_topology, root=install_root)
 
     plans = build_rollback_plans(backup_dir, manifest, files, checker=checker)
 
@@ -884,7 +946,7 @@ def command_rollback(
 
             def preflight(plan: RollbackPlan = plan) -> None:
                 if enforce_topology:
-                    enforce_official_write_topology(manifest, [plan.spec])
+                    enforce_official_write_topology(manifest, [plan.spec], root=install_root)
                 require_regular_non_reparse_file(plan.target, f"{plan.spec.key} rollback target")
                 require_processes_stopped([plan.spec], checker=checker)
                 if sha256_file(plan.target) != plan.current_hash:
@@ -913,6 +975,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--target")
     parser.add_argument("--all", action="store_true", help="operate on all allowlisted current-build targets")
     parser.add_argument("--targets", help="comma-separated target keys, for example: main,service")
+    parser.add_argument("--root", help="MuMuPlayer install root; default H:\\MuMuPlayer")
     parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--backup", help="backup directory for rollback")
     parser.add_argument("--dry-run", action="store_true", help="compatibility alias for the dry-run command")
@@ -927,21 +990,29 @@ def main(argv: list[str]) -> int:
     if args.dry_run and args.command not in (None, "dry-run", "apply"):
         raise PatchError("--dry-run can only be combined with apply or the default command")
 
-    manifest = load_manifest(Path(args.manifest))
+    install_root = normalize_install_root(Path(args.root) if args.root else None)
+    manifest_path = Path(args.manifest)
+    manifest = load_manifest(manifest_path)
+    if args.root and not is_default_manifest_path(manifest_path):
+        raise PatchError("--root requires the trusted default manifest; custom manifests are read-only")
+    if is_default_manifest_path(manifest_path):
+        manifest = bind_manifest_to_root(manifest, install_root)
     try:
         if command == "rollback":
             if not args.backup:
                 raise PatchError("rollback requires --backup <backup-dir>")
-            return command_rollback(Path(args.backup), manifest)
-        targets = selected_targets(args, manifest)
+            return command_rollback(Path(args.backup), manifest, root=install_root)
+        targets = selected_targets(args, manifest, root=install_root)
         if command == "scan":
             return command_scan(targets)
         if command == "verify":
             return command_verify(targets)
         if command == "dry-run":
-            return command_apply(targets, manifest, dry_run=True, no_backup=args.no_backup)
+            return command_apply(targets, manifest, dry_run=True, no_backup=args.no_backup, root=install_root)
         if command == "apply":
-            return command_apply(targets, manifest, dry_run=args.dry_run, no_backup=args.no_backup)
+            return command_apply(
+                targets, manifest, dry_run=args.dry_run, no_backup=args.no_backup, root=install_root
+            )
         raise PatchError(f"unsupported command: {command}")
     except PatchError:
         raise

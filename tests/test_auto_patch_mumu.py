@@ -232,10 +232,16 @@ class AutoPatchMumuTests(unittest.TestCase):
 
             try:
                 setattr(patcher, "require_processes_stopped", lambda targets: None)
-                setattr(patcher, "unique_backup_dir", lambda: root / "backup")
+                setattr(patcher, "unique_backup_dir", lambda backup_root=None: root / "backup")
                 setattr(patcher, "temp_replace_bytes", fake_replace)
                 with self.assertRaisesRegex(patcher.PatchError, "synthetic second write failure"):
-                    patcher.command_apply(list(manifest.targets.values()), manifest, dry_run=False, enforce_topology=False)
+                    patcher.command_apply(
+                        list(manifest.targets.values()),
+                        manifest,
+                        dry_run=False,
+                        enforce_topology=False,
+                        root=root,
+                    )
             finally:
                 setattr(patcher, "require_processes_stopped", original_require)
                 setattr(patcher, "unique_backup_dir", original_unique_backup_dir)
@@ -555,9 +561,9 @@ class AutoPatchMumuTests(unittest.TestCase):
             patcher.selected_targets(args, default_manifest)
         launcher = (MODULE_PATH.parent / "start-mumu-patched.cmd").read_text(encoding="utf-8")
         self.assertIn(r"%LocalAppData%\Programs\Python\Python312\python.exe", launcher)
-        self.assertIn("apply --targets main,service", launcher)
-        self.assertIn("verify --targets main,service", launcher)
-        self.assertEqual(launcher.count("apply --targets main,service"), 1)
+        self.assertIn('apply --root "%ROOT%" --targets main,service', launcher)
+        self.assertIn('verify --root "%ROOT%" --targets main,service', launcher)
+        self.assertEqual(launcher.count("apply --root"), 1)
         self.assertNotIn("\npython ", launcher.lower())
         self.assertNotIn("C:\\Users\\didi\\", launcher)
         self.assertNotIn("--targets main,service,remote", launcher)
@@ -820,6 +826,65 @@ class AutoPatchMumuTests(unittest.TestCase):
                 setattr(patcher, "temp_replace_bytes", original_replace)
             self.assertGreaterEqual(calls["process_checks"], 1)
             self.assertEqual(paths[0].read_bytes(), patched_by_key["main"])
+
+    def test_bind_manifest_to_root_remaps_official_paths(self) -> None:
+        default_manifest = patcher.load_manifest(patcher.DEFAULT_MANIFEST)
+        other_root = Path(r"D:\Games\MuMuPlayer")
+        bound = patcher.bind_manifest_to_root(default_manifest, other_root)
+        self.assertEqual(bound.digest, default_manifest.digest)
+        self.assertEqual(
+            bound.targets["main"].path,
+            (other_root / "nx_main" / "MuMuNxMain.exe").resolve(strict=False),
+        )
+        self.assertEqual(
+            bound.targets["service"].path,
+            (other_root / "nx_main" / "MuMuNxService.exe").resolve(strict=False),
+        )
+        self.assertEqual(
+            bound.targets["remote"].path,
+            (other_root / "nx_main" / "MuMuRemoteService.exe").resolve(strict=False),
+        )
+        patcher.enforce_official_write_topology(bound, list(bound.targets.values()), root=other_root)
+
+    def test_normalize_install_root_refuses_global(self) -> None:
+        with self.assertRaisesRegex(patcher.PatchError, "MuMuPlayerGlobal"):
+            patcher.normalize_install_root(Path(r"H:\MuMuPlayerGlobal"))
+
+    def test_backup_root_for_uses_install_root(self) -> None:
+        root = Path(r"D:\Games\MuMuPlayer")
+        self.assertEqual(
+            patcher.backup_root_for(root),
+            (root / "_ad_vip_tools" / "backups" / "direct-exe").resolve(strict=False),
+        )
+
+    def test_selected_targets_default_main_uses_root(self) -> None:
+        default_manifest = patcher.load_manifest(patcher.DEFAULT_MANIFEST)
+        other_root = Path(r"E:\MuMuPlayer")
+        bound = patcher.bind_manifest_to_root(default_manifest, other_root)
+        args = patcher.build_parser().parse_args(["scan"])
+        selected = patcher.selected_targets(args, bound, root=other_root)
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0].key, "main")
+        self.assertEqual(
+            selected[0].path,
+            (other_root / "nx_main" / "MuMuNxMain.exe").resolve(strict=False),
+        )
+
+    def test_root_with_custom_manifest_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            data = self.original_data()
+            custom, _ = self.make_manifest(root, data)
+            with self.assertRaisesRegex(patcher.PatchError, "--root requires the trusted default manifest"):
+                patcher.main(
+                    [
+                        "scan",
+                        "--root",
+                        str(root),
+                        "--manifest",
+                        str(custom.path),
+                    ]
+                )
 
 
 if __name__ == "__main__":
