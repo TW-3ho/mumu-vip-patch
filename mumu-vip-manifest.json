@@ -1,0 +1,416 @@
+{
+  "schema_version": 1,
+  "build": {
+    "product": "MuMuPlayer",
+    "version": "6.2.5.0",
+    "channel": "nochannel-mumu12",
+    "locked_at": "2026-07-13"
+  },
+  "targets": [
+    {
+      "key": "main",
+      "name": "MuMuNxMain.exe",
+      "path": "H:\\MuMuPlayer\\nx_main\\MuMuNxMain.exe",
+      "process_name": "MuMuNxMain.exe",
+      "baseline_sha256": "75F46BD27819E09FCC8E92434D9F64B9A4A0552D2893793BB4F958D9D03E67E6",
+      "entries": [
+        {
+          "id": "main-network-account-01",
+          "offset": "0xBDAFEA",
+          "original": "E8 5E FF 44 FF",
+          "patched": "B8 7F E6 85 F4",
+          "description": "network/current account"
+        },
+        {
+          "id": "main-network-account-02",
+          "offset": "0xBDB07E",
+          "original": "E8 DA 7D 42 FF",
+          "patched": "B8 01 00 00 00",
+          "description": "network/current account"
+        },
+        {
+          "id": "main-network-account-03",
+          "offset": "0xBDB10A",
+          "original": "E8 4E 7D 42 FF",
+          "patched": "B8 01 00 00 00",
+          "description": "network/current account"
+        },
+        {
+          "id": "main-network-account-04",
+          "offset": "0xBDB344",
+          "original": "E8 14 7B 42 FF",
+          "patched": "B8 02 00 00 00",
+          "description": "network/current account"
+        },
+        {
+          "id": "main-network-account-05",
+          "offset": "0xBDB636",
+          "original": "E8 22 78 42 FF",
+          "patched": "B8 01 00 00 00",
+          "description": "network/current account"
+        },
+        {
+          "id": "main-ui-theme-path",
+          "offset": "0x631992",
+          "original": "74 11",
+          "patched": "74 E0",
+          "description": "treat absent/default theme as VIP theme path"
+        },
+        {
+          "id": "main-ui-hide-trial",
+          "offset": "0xBB3876",
+          "original": "BA 05 00 00 00",
+          "patched": "BA 04 00 00 00",
+          "description": "hide trial UI state"
+        },
+        {
+          "id": "main-ui-skip-popup",
+          "offset": "0x120252",
+          "original": "0F 85 1E 01 00 00",
+          "patched": "E9 1F 01 00 00 90",
+          "description": "skip popup event while preserving cleanup event"
+        },
+        {
+          "id": "main-cache-a-01",
+          "offset": "0xF1D63E",
+          "original": "E8 1A 58 0E FF",
+          "patched": "B8 01 00 00 00",
+          "description": "cache A"
+        },
+        {
+          "id": "main-cache-a-02",
+          "offset": "0xF1D798",
+          "original": "E8 B0 D7 10 FF",
+          "patched": "B8 7F E6 85 F4",
+          "description": "cache A"
+        },
+        {
+          "id": "main-cache-a-03",
+          "offset": "0xF1D7FB",
+          "original": "E8 5D 56 0E FF",
+          "patched": "B8 01 00 00 00",
+          "description": "cache A"
+        },
+        {
+          "id": "main-cache-a-04",
+          "offset": "0xF1D8BD",
+          "original": "E8 9B 55 0E FF",
+          "patched": "B8 02 00 00 00",
+          "description": "cache A"
+        },
+        {
+          "id": "main-cache-a-05",
+          "offset": "0xF1D934",
+          "original": "E8 24 55 0E FF",
+          "patched": "B8 01 00 00 00",
+          "description": "cache A"
+        },
+        {
+          "id": "main-cache-b-01",
+          "offset": "0xF20AE5",
+          "original": "E8 63 A4 10 FF",
+          "patched": "B8 7F E6 85 F4",
+          "description": "cache B"
+        },
+        {
+          "id": "main-cache-b-02",
+          "offset": "0xF20B6D",
+          "original": "E8 EB 22 0E FF",
+          "patched": "B8 01 00 00 00",
+          "description": "cache B"
+        },
+        {
+          "id": "main-cache-b-03",
+          "offset": "0xF20BC0",
+          "original": "E8 98 22 0E FF",
+          "patched": "B8 01 00 00 00",
+          "description": "cache B"
+        },
+        {
+          "id": "main-cache-b-04",
+          "offset": "0xF20D61",
+          "original": "E8 F7 20 0E FF",
+          "patched": "B8 02 00 00 00",
+          "description": "cache B"
+        },
+        {
+          "id": "main-cache-b-05",
+          "offset": "0xF20E48",
+          "original": "E8 10 20 0E FF",
+          "patched": "B8 01 00 00 00",
+          "description": "cache B"
+        },
+        {
+          "id": "main-serialize-a-01",
+          "offset": "0xF1750E",
+          "original": "48 8B 85 C8 02 00 00",
+          "patched": "B8 7F E6 85 F4 90 90",
+          "description": "serialize A"
+        },
+        {
+          "id": "main-serialize-a-02",
+          "offset": "0xF1760F",
+          "original": "8B 85 D4 02 00 00",
+          "patched": "B8 01 00 00 00 90",
+          "description": "serialize A"
+        },
+        {
+          "id": "main-serialize-a-03",
+          "offset": "0xF17700",
+          "original": "8B 85 D8 02 00 00",
+          "patched": "B8 01 00 00 00 90",
+          "description": "serialize A"
+        },
+        {
+          "id": "main-serialize-a-04",
+          "offset": "0xF178F0",
+          "original": "8B 85 08 03 00 00",
+          "patched": "B8 01 00 00 00 90",
+          "description": "serialize A"
+        },
+        {
+          "id": "main-serialize-a-05",
+          "offset": "0xF179C2",
+          "original": "8B 85 00 03 00 00",
+          "patched": "B8 02 00 00 00 90",
+          "description": "serialize A"
+        },
+        {
+          "id": "main-serialize-b-01",
+          "offset": "0xF227F0",
+          "original": "48 8B 8D 78 03 00 00",
+          "patched": "B9 7F E6 85 F4 90 90",
+          "description": "serialize B"
+        },
+        {
+          "id": "main-serialize-b-02",
+          "offset": "0xF228F2",
+          "original": "8B 8D 84 03 00 00",
+          "patched": "B9 01 00 00 00 90",
+          "description": "serialize B"
+        },
+        {
+          "id": "main-serialize-b-03",
+          "offset": "0xF22ABD",
+          "original": "8B 8D 88 03 00 00",
+          "patched": "B9 01 00 00 00 90",
+          "description": "serialize B"
+        },
+        {
+          "id": "main-serialize-b-04",
+          "offset": "0xF22C6E",
+          "original": "8B 8D B0 03 00 00",
+          "patched": "B9 01 00 00 00 90",
+          "description": "serialize B"
+        },
+        {
+          "id": "main-serialize-b-05",
+          "offset": "0xF22D4D",
+          "original": "8B 8D B4 03 00 00",
+          "patched": "B9 02 00 00 00 90",
+          "description": "serialize B"
+        },
+        {
+          "id": "main-existing-trial-return",
+          "offset": "0x94C678",
+          "original": "B8 01 00 00 00",
+          "patched": "B8 01 00 00 00",
+          "mode": "validation",
+          "description": "existing trial return patch; preserve"
+        },
+        {
+          "id": "main-existing-expired-text",
+          "offset": "0x148FF18",
+          "original": "56 49 50 00 00 00 00 00 00 00 00",
+          "patched": "56 49 50 00 00 00 00 00 00 00 00",
+          "mode": "validation",
+          "description": "existing VIP text in original 11-byte slot; preserve"
+        },
+        {
+          "id": "main-existing-have-expired-text",
+          "offset": "0x148FF28",
+          "original": "56 49 50 00 00 00 00 00 00 00 00 00 00",
+          "patched": "56 49 50 00 00 00 00 00 00 00 00 00 00",
+          "mode": "validation",
+          "description": "existing VIP text in original 13-byte slot; preserve"
+        }
+      ],
+      "patched_sha256": "95DD3F2C8CE6FAE61258E8ADA2610592A87DC3C970CFD6FA8BF7C74A4C5E1309"
+    },
+    {
+      "key": "service",
+      "name": "MuMuNxService.exe",
+      "path": "H:\\MuMuPlayer\\nx_main\\MuMuNxService.exe",
+      "process_name": "MuMuNxService.exe",
+      "baseline_sha256": "AD46011C76FB461A6AB69A57DD76969399AB0A59470E6E28610AD39D27D1CB9D",
+      "entries": [
+        {
+          "id": "service-endpoint-local-member",
+          "offset": "0xFB7698",
+          "original": "76 31 2F 6D 65 6D 62 65 72 2F 74 72 69 61 6C",
+          "patched": "76 31 2F 6D 65 6D 62 65 72 2F 6C 6F 63 61 6C",
+          "description": "v1/member/trial -> v1/member/local"
+        },
+        {
+          "id": "service-cache-a-01",
+          "offset": "0x94F9EE",
+          "original": "E8 C8 2B 6B FF",
+          "patched": "B8 01 00 00 00",
+          "description": "cache A"
+        },
+        {
+          "id": "service-cache-a-02",
+          "offset": "0x94FB48",
+          "original": "E8 68 24 6D FF",
+          "patched": "B8 7F E6 85 F4",
+          "description": "cache A"
+        },
+        {
+          "id": "service-cache-a-03",
+          "offset": "0x94FBAB",
+          "original": "E8 0B 2A 6B FF",
+          "patched": "B8 01 00 00 00",
+          "description": "cache A"
+        },
+        {
+          "id": "service-cache-a-04",
+          "offset": "0x94FC6D",
+          "original": "E8 49 29 6B FF",
+          "patched": "B8 02 00 00 00",
+          "description": "cache A"
+        },
+        {
+          "id": "service-cache-a-05",
+          "offset": "0x94FCE4",
+          "original": "E8 D2 28 6B FF",
+          "patched": "B8 01 00 00 00",
+          "description": "cache A"
+        },
+        {
+          "id": "service-cache-a-06",
+          "offset": "0x94FE84",
+          "original": "E8 11 B1 6B FF",
+          "patched": "B0 01 90 90 90",
+          "description": "cache A"
+        },
+        {
+          "id": "service-cache-b-01",
+          "offset": "0x952E95",
+          "original": "E8 1B F1 6C FF",
+          "patched": "B8 7F E6 85 F4",
+          "description": "cache B"
+        },
+        {
+          "id": "service-cache-b-02",
+          "offset": "0x952F1D",
+          "original": "E8 99 F6 6A FF",
+          "patched": "B8 01 00 00 00",
+          "description": "cache B"
+        },
+        {
+          "id": "service-cache-b-03",
+          "offset": "0x952F70",
+          "original": "E8 46 F6 6A FF",
+          "patched": "B8 01 00 00 00",
+          "description": "cache B"
+        },
+        {
+          "id": "service-cache-b-04",
+          "offset": "0x953111",
+          "original": "E8 A5 F4 6A FF",
+          "patched": "B8 02 00 00 00",
+          "description": "cache B"
+        },
+        {
+          "id": "service-cache-b-05",
+          "offset": "0x9531F8",
+          "original": "E8 BE F3 6A FF",
+          "patched": "B8 01 00 00 00",
+          "description": "cache B"
+        },
+        {
+          "id": "service-serialize-01",
+          "offset": "0x954DB0",
+          "original": "48 8B 8D 78 03 00 00",
+          "patched": "B9 7F E6 85 F4 90 90",
+          "description": "serialize"
+        },
+        {
+          "id": "service-serialize-02",
+          "offset": "0x954EB2",
+          "original": "8B 8D 84 03 00 00",
+          "patched": "B9 01 00 00 00 90",
+          "description": "serialize"
+        },
+        {
+          "id": "service-serialize-03",
+          "offset": "0x95507D",
+          "original": "8B 8D 88 03 00 00",
+          "patched": "B9 01 00 00 00 90",
+          "description": "serialize"
+        },
+        {
+          "id": "service-serialize-04",
+          "offset": "0x95522E",
+          "original": "8B 8D B0 03 00 00",
+          "patched": "B9 01 00 00 00 90",
+          "description": "serialize"
+        },
+        {
+          "id": "service-serialize-05",
+          "offset": "0x95530D",
+          "original": "8B 8D B4 03 00 00",
+          "patched": "B9 02 00 00 00 90",
+          "description": "serialize"
+        },
+        {
+          "id": "service-serialize-06",
+          "offset": "0x95580B",
+          "original": "0F B6 8D 32 04 00 00",
+          "patched": "B1 01 90 90 90 90 90",
+          "description": "serialize"
+        },
+        {
+          "id": "service-existing-local-member-return",
+          "offset": "0x26EE88",
+          "original": "B8 01 00 00 00",
+          "patched": "B8 01 00 00 00",
+          "mode": "validation",
+          "description": "existing local member return; preserve"
+        }
+      ],
+      "patched_sha256": "1C41A8DF731C7A0D0EFADC4681ACA6014FE1D2C2BD0D1EDFD2EB03DB8DFDFF74"
+    },
+    {
+      "key": "remote",
+      "name": "MuMuRemoteService.exe",
+      "path": "H:\\MuMuPlayer\\nx_main\\MuMuRemoteService.exe",
+      "process_name": "MuMuRemoteService.exe",
+      "baseline_sha256": "7DE5204AFF853E2FB93617B96B99277836D23B8C89466AC716A94B6559F58B65",
+      "entries": [
+        {
+          "id": "remote-init-live-server-state",
+          "offset": "0x323BA",
+          "original": "41 0F 95 C7",
+          "patched": "45 31 FF 90",
+          "description": "initLiveServerState"
+        },
+        {
+          "id": "remote-handle-healthd-state",
+          "offset": "0x30660",
+          "original": "48 89 5C 24 10",
+          "patched": "C3 90 90 90 90",
+          "description": "handleHealthdState"
+        },
+        {
+          "id": "remote-handle-server-state",
+          "offset": "0x30FA0",
+          "original": "48 89 5C 24 10",
+          "patched": "C3 90 90 90 90",
+          "description": "handleServerState"
+        }
+      ],
+      "patched_sha256": "14D86EA7A958FBE19E7383F33D5622E5441363955BD6C529FC1385D16FC9BB1D"
+    }
+  ]
+}
