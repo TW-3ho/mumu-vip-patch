@@ -55,7 +55,7 @@ python auto-patch-mumu.py verify --targets main,service
 - Main (`H:\MuMuPlayer\nx_main\MuMuNxMain.exe`) is patched. Post SHA-256: `95DD3F2C8CE6FAE61258E8ADA2610592A87DC3C970CFD6FA8BF7C74A4C5E1309`. Backup: `H:\MuMuPlayer\_ad_vip_tools\backups\direct-exe\20260713-215916`.
 - Main coverage is 28 new manifest patches plus 3 validation-only prior states: 2099 expiry, member/device/type status, trial-used/inactive state, cache parse/serialize, VIP theme default, hidden trial UI, and expiry popup suppression.
 - Service (`H:\MuMuPlayer\nx_main\MuMuNxService.exe`) is patched. Post SHA-256: `1C41A8DF731C7A0D0EFADC4681ACA6014FE1D2C2BD0D1EDFD2EB03DB8DFDFF74`. Backup: `H:\MuMuPlayer\_ad_vip_tools\backups\direct-exe\20260713-215919`.
-- Service coverage is 18 new patch entries plus 1 validation-only existing local member return: `v1/member/trial` to `v1/member/local`, cache parse/serialize, and valid flag handling.
+- Service coverage is 19 patch entries: `v1/member/trial` to `v1/member/local`, cache parse/serialize, valid flag handling, and clean-machine member return `4 -> 1`. The manifest accepts both the historical local baseline hash and the clean-install Service baseline hash for this same version.
 - RemoteService (`H:\MuMuPlayer\nx_main\MuMuRemoteService.exe`) now verifies patched. Post SHA-256: `14D86EA7A958FBE19E7383F33D5622E5441363955BD6C529FC1385D16FC9BB1D`. Patched offsets are `0x323BA`, `0x30660`, and `0x30FA0`.
 - `H:\MuMuPlayerGlobal` remains untouched.
 
@@ -186,7 +186,7 @@ The tests create temporary synthetic files only. They do not read or write offic
 
 Latest recorded validation:
 
-- 43 unit tests passed; 2 symlink/reparse tests were skipped because symlink creation was unavailable in the environment.
+- 46 unit tests passed; 2 symlink/reparse tests were skipped because symlink creation was unavailable in the environment.
 - Manifest scan reports Main, Service, and RemoteService fully patched; Main and Service verification pass individually.
 - Current local hashes match the manifest patched SHA-256 values for all three EXEs.
 - `last_crash` stayed `2026-07-12T12:57:18.635Z`.
