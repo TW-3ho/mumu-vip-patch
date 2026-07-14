@@ -243,6 +243,9 @@
       "path": "H:\\MuMuPlayer\\nx_main\\MuMuNxService.exe",
       "process_name": "MuMuNxService.exe",
       "baseline_sha256": "AD46011C76FB461A6AB69A57DD76969399AB0A59470E6E28610AD39D27D1CB9D",
+      "baseline_sha256_alternates": [
+        "7FC1508EA6D151F2CCED63A8E02DDC69B207DF01920A1BCC01F1BD2A1E449B6E"
+      ],
       "entries": [
         {
           "id": "service-endpoint-local-member",
@@ -373,10 +376,9 @@
         {
           "id": "service-existing-local-member-return",
           "offset": "0x26EE88",
-          "original": "B8 01 00 00 00",
+          "original": "B8 04 00 00 00",
           "patched": "B8 01 00 00 00",
-          "mode": "validation",
-          "description": "existing local member return; preserve"
+          "description": "fresh service member return 4 -> local member return 1"
         }
       ],
       "patched_sha256": "1C41A8DF731C7A0D0EFADC4681ACA6014FE1D2C2BD0D1EDFD2EB03DB8DFDFF74"

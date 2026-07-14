@@ -28,7 +28,7 @@ DEFAULT_MANIFEST = PACKAGE_DIR / "mumu-vip-manifest.json"
 DEFAULT_INSTALL_ROOT = Path(r"H:\MuMuPlayer")
 FORBIDDEN_PATH_MARKER = "mumuplayerglobal"
 CHUNK_SIZE = 1024 * 1024
-EXPECTED_OFFICIAL_MANIFEST_SHA256 = "C894DB7F607B6E70F696D6C1B3128F99B44BE371D99B379C70B38BC090E2165D"
+EXPECTED_OFFICIAL_MANIFEST_SHA256 = "E28A36E38AEFD90AD862C7E487135CB94276767F96BAE18AF66812141E377DD4"
 FILE_ATTRIBUTE_REPARSE_POINT = 0x400
 SAFE_PROCESS_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+\.exe$")
 SHA256_RE = re.compile(r"^[A-Fa-f0-9]{64}$")
@@ -77,6 +77,7 @@ class ByteEntry:
     offset: int
     original: bytes
     patched: bytes
+    original_alternates: tuple[bytes, ...] = ()
     mode: str = "patch"
     description: str = ""
 
@@ -93,6 +94,7 @@ class TargetSpec:
     baseline_sha256: str
     patched_sha256: str
     entries: tuple[ByteEntry, ...]
+    baseline_sha256_alternates: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -230,6 +232,14 @@ def validate_process_name(value: str) -> str:
     return value
 
 
+def target_baseline_hashes(spec: TargetSpec) -> tuple[str, ...]:
+    return (spec.baseline_sha256, *spec.baseline_sha256_alternates)
+
+
+def is_baseline_hash(spec: TargetSpec, digest: str) -> bool:
+    return digest.upper() in set(target_baseline_hashes(spec))
+
+
 def load_manifest(path: Path = DEFAULT_MANIFEST) -> Manifest:
     raw = json.loads(path.read_text(encoding="utf-8"))
     targets: dict[str, TargetSpec] = {}
@@ -255,11 +265,18 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> Manifest:
         if target_path.name != process_name:
             raise PatchError(f"{key} path basename must match process_name")
         baseline_sha256 = validate_sha256(target["baseline_sha256"], f"{key}.baseline_sha256")
+        baseline_sha256_alternates = tuple(
+            validate_sha256(value, f"{key}.baseline_sha256_alternates")
+            for value in target.get("baseline_sha256_alternates", [])
+        )
+        if len(set((baseline_sha256, *baseline_sha256_alternates))) != 1 + len(baseline_sha256_alternates):
+            raise PatchError(f"{key}.baseline_sha256_alternates must not duplicate baseline hashes")
         patched_sha256 = validate_sha256(target["patched_sha256"], f"{key}.patched_sha256")
         entries: list[ByteEntry] = []
         for entry in target["entries"]:
             original = bytes_from_hex(entry["original"])
             patched = bytes_from_hex(entry["patched"])
+            original_alternates = tuple(bytes_from_hex(value) for value in entry.get("original_alternates", []))
             mode = entry.get("mode", "patch")
             offset = int(str(entry["offset"]), 16)
             if mode not in {"patch", "validation"}:
@@ -268,6 +285,12 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> Manifest:
                 raise PatchError(f"{key}:{entry['id']} offset must be nonnegative")
             if len(original) != len(patched):
                 raise PatchError(f"{key}:{entry['id']} original/patched length mismatch")
+            if any(len(value) != len(original) for value in original_alternates):
+                raise PatchError(f"{key}:{entry['id']} original_alternates length mismatch")
+            if len(set((original, *original_alternates))) != 1 + len(original_alternates):
+                raise PatchError(f"{key}:{entry['id']} original_alternates must not duplicate original bytes")
+            if patched in original_alternates:
+                raise PatchError(f"{key}:{entry['id']} original_alternates must not duplicate patched bytes")
             if mode == "validation" and original != patched:
                 raise PatchError(f"{key}:{entry['id']} validation entries must have identical bytes")
             if mode == "patch" and original == patched:
@@ -279,6 +302,7 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> Manifest:
                     offset=offset,
                     original=original,
                     patched=patched,
+                    original_alternates=original_alternates,
                     mode=mode,
                     description=entry.get("description", ""),
                 )
@@ -288,6 +312,7 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> Manifest:
             path=target_path,
             process_name=process_name,
             baseline_sha256=baseline_sha256,
+            baseline_sha256_alternates=baseline_sha256_alternates,
             patched_sha256=patched_sha256,
             entries=tuple(entries),
         )
@@ -355,6 +380,7 @@ def bind_manifest_to_root(manifest: Manifest, root: Path) -> Manifest:
             path=official_path,
             process_name=official_process,
             baseline_sha256=spec.baseline_sha256,
+            baseline_sha256_alternates=spec.baseline_sha256_alternates,
             patched_sha256=spec.patched_sha256,
             entries=spec.entries,
         )
@@ -395,7 +421,7 @@ def classify_entry(data: bytes, entry: ByteEntry) -> EntryState:
     actual = data[entry.offset:end]
     if actual == entry.patched:
         return EntryState(entry, "patched", hex_bytes(actual))
-    if actual == entry.original:
+    if actual == entry.original or actual in entry.original_alternates:
         return EntryState(entry, "original", hex_bytes(actual))
     return EntryState(entry, "third", hex_bytes(actual))
 
@@ -426,7 +452,7 @@ def analyze_target(spec: TargetSpec, data: bytes | None = None) -> TargetAnalysi
                     "offset": entry.offset,
                     "offset_hex": f"0x{entry.offset:X}",
                     "length": entry.length,
-                    "original": hex_bytes(entry.original),
+                    "original": state.actual_hex,
                     "patched": hex_bytes(entry.patched),
                 }
             )
@@ -435,8 +461,7 @@ def analyze_target(spec: TargetSpec, data: bytes | None = None) -> TargetAnalysi
 
     digest = sha256_bytes(data)
     fully_patched = all(state.state == "patched" for state in entry_states)
-    fully_original = all(state.state == "original" or state.entry.mode == "validation" for state in entry_states)
-    hash_allowed = (digest == spec.baseline_sha256 and fully_original) or (digest == spec.patched_sha256 and fully_patched)
+    hash_allowed = is_baseline_hash(spec, digest) or (digest == spec.patched_sha256 and fully_patched)
     if not hash_allowed:
         raise PatchError(
             f"{spec.key}: SHA256 {digest} does not match the byte state; "
@@ -500,7 +525,7 @@ def apply_patch_bytes(data: bytes, analysis: TargetAnalysis) -> bytes:
         entry = by_id[diff["entry_id"]]
         start = entry.offset
         end = start + entry.length
-        if bytes(patched[start:end]) != entry.original:
+        if bytes(patched[start:end]) != bytes_from_hex(diff["original"]):
             raise PatchError(f"{analysis.spec.key}:{entry.entry_id} changed while planning")
         patched[start:end] = entry.patched
     result = bytes(patched)
@@ -832,6 +857,7 @@ class RollbackPlan:
     target: Path
     backup_file: Path
     restore_data: bytes
+    restore_hash: str
     current_data: bytes
     current_hash: str
     noop: bool
@@ -863,7 +889,8 @@ def build_rollback_plans(
             raise PatchError(f"rollback metadata process_name mismatch for {spec.key}")
         if item.get("backup_file") != spec.path.name:
             raise PatchError(f"rollback metadata backup_file mismatch for {spec.key}")
-        if item.get("pre_sha256", "").upper() != spec.baseline_sha256:
+        metadata_pre_hash = str(item.get("pre_sha256", "")).upper()
+        if not is_baseline_hash(spec, metadata_pre_hash):
             raise PatchError(f"rollback metadata pre_sha256 mismatch for {spec.key}")
         if item.get("post_sha256", "").upper() != spec.patched_sha256:
             raise PatchError(f"rollback metadata post_sha256 mismatch for {spec.key}")
@@ -874,20 +901,21 @@ def build_rollback_plans(
         spec = manifest.targets[item["target_key"]]
         backup_file = backup_file_from_metadata(backup_dir, item["backup_file"])
         restore_data = backup_file.read_bytes()
-        if sha256_bytes(restore_data) != spec.baseline_sha256:
+        restore_hash = sha256_bytes(restore_data)
+        if restore_hash != str(item.get("pre_sha256", "")).upper() or not is_baseline_hash(spec, restore_hash):
             raise PatchError(f"rollback backup hash mismatch: {backup_file}")
         require_regular_non_reparse_file(spec.path, f"{spec.key} rollback target")
         current_data = spec.path.read_bytes()
         current_hash = sha256_bytes(current_data)
-        if current_hash == spec.baseline_sha256:
-            plans.append(RollbackPlan(spec, spec.path, backup_file, restore_data, current_data, current_hash, True))
+        if current_hash == restore_hash:
+            plans.append(RollbackPlan(spec, spec.path, backup_file, restore_data, restore_hash, current_data, current_hash, True))
             continue
         if current_hash != spec.patched_sha256:
             raise PatchError(
                 f"rollback target drift for {spec.path}: expected current post hash {spec.patched_sha256} "
-                f"or pre hash {spec.baseline_sha256}, got {current_hash}"
+                f"or pre hash {restore_hash}, got {current_hash}"
             )
-        plans.append(RollbackPlan(spec, spec.path, backup_file, restore_data, current_data, current_hash, False))
+        plans.append(RollbackPlan(spec, spec.path, backup_file, restore_data, restore_hash, current_data, current_hash, False))
     return plans
 
 
@@ -900,7 +928,7 @@ def recover_rollback_writes(
         def preflight(plan: RollbackPlan = plan) -> None:
             require_regular_non_reparse_file(plan.target, f"{plan.spec.key} rollback recovery target")
             require_processes_stopped([plan.spec], checker=checker)
-            if sha256_file(plan.target) != plan.spec.baseline_sha256:
+            if sha256_file(plan.target) != plan.restore_hash:
                 raise PatchError(f"{plan.spec.key}: rollback recovery target changed before replace")
 
         temp_replace_bytes(plan.target, plan.current_data, plan.current_hash, preflight=preflight)
@@ -952,9 +980,9 @@ def command_rollback(
                 if sha256_file(plan.target) != plan.current_hash:
                     raise PatchError(f"{plan.spec.key}: rollback target changed before replace; refusing write")
 
-            temp_replace_bytes(plan.target, plan.restore_data, plan.spec.baseline_sha256, preflight=preflight)
+            temp_replace_bytes(plan.target, plan.restore_data, plan.restore_hash, preflight=preflight)
             restored = sha256_file(plan.target)
-            if restored != plan.spec.baseline_sha256:
+            if restored != plan.restore_hash:
                 raise PatchError(f"rollback restore hash mismatch: {plan.target}")
             written.append(plan)
             print(f"[rollback] {plan.target} sha256={restored}")

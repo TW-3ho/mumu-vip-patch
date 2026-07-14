@@ -886,6 +886,97 @@ class AutoPatchMumuTests(unittest.TestCase):
                     ]
                 )
 
+    def test_entry_original_alternates_use_actual_bytes_for_diff(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "MuMuNxService.exe"
+            clean_data = bytearray(b"000000000000")
+            clean_data[4:9] = bytes.fromhex("B8 04 00 00 00")
+            local_data = bytearray(clean_data)
+            local_data[4:9] = bytes.fromhex("B8 03 00 00 00")
+            patched_data = bytearray(clean_data)
+            patched_data[4:9] = bytes.fromhex("B8 01 00 00 00")
+            target.write_bytes(clean_data)
+            raw = {
+                "schema_version": 1,
+                "targets": [
+                    {
+                        "key": "service",
+                        "path": str(target),
+                        "process_name": "MuMuNxService.exe",
+                        "baseline_sha256": patcher.sha256_bytes(bytes(local_data)),
+                        "baseline_sha256_alternates": [patcher.sha256_bytes(bytes(clean_data))],
+                        "patched_sha256": patcher.sha256_bytes(bytes(patched_data)),
+                        "entries": [
+                            {
+                                "id": "member-return",
+                                "offset": "0x4",
+                                "original": "B8 03 00 00 00",
+                                "original_alternates": ["B8 04 00 00 00"],
+                                "patched": "B8 01 00 00 00",
+                            }
+                        ],
+                    }
+                ],
+            }
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps(raw), encoding="utf-8")
+            manifest = patcher.load_manifest(manifest_path)
+            analysis = patcher.analyze_target(manifest.targets["service"])
+            self.assertEqual(analysis.planned_diffs[0]["original"], "B8 04 00 00 00")
+            self.assertEqual(patcher.sha256_bytes(patcher.apply_patch_bytes(bytes(clean_data), analysis)), raw["targets"][0]["patched_sha256"])
+
+    def test_service_manifest_accepts_clean_member_return_baseline(self) -> None:
+        default_manifest = patcher.load_manifest(patcher.DEFAULT_MANIFEST)
+        service = default_manifest.targets["service"]
+        entry = next(item for item in service.entries if item.entry_id == "service-existing-local-member-return")
+        self.assertEqual(patcher.hex_bytes(entry.original), "B8 04 00 00 00")
+        self.assertEqual(patcher.hex_bytes(entry.patched), "B8 01 00 00 00")
+        self.assertIn("7FC1508EA6D151F2CCED63A8E02DDC69B207DF01920A1BCC01F1BD2A1E449B6E", service.baseline_sha256_alternates)
+
+    def test_rollback_accepts_alternate_baseline_backup_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            original = self.original_data()
+            alternate = bytearray(original)
+            alternate[2] = 0xAB
+            manifest, target_path = self.make_manifest(root, original)
+            target = manifest.targets["main"]
+            entries = list(target.entries)
+            entries[0] = patcher.ByteEntry(
+                target_key=entries[0].target_key,
+                entry_id=entries[0].entry_id,
+                offset=entries[0].offset,
+                original=bytes.fromhex("AB"),
+                patched=entries[0].patched,
+                original_alternates=(entries[0].original,),
+                mode=entries[0].mode,
+                description=entries[0].description,
+            )
+            target_with_alternate = patcher.TargetSpec(
+                key=target.key,
+                path=target.path,
+                process_name=target.process_name,
+                baseline_sha256=target.baseline_sha256,
+                patched_sha256=target.patched_sha256,
+                entries=tuple(entries),
+                baseline_sha256_alternates=(patcher.sha256_bytes(bytes(alternate)),),
+            )
+            manifest = patcher.Manifest(
+                path=manifest.path,
+                raw=manifest.raw,
+                targets={"main": target_with_alternate},
+                digest=manifest.digest,
+            )
+            target_path.write_bytes(alternate)
+            analysis = patcher.analyze_target(target_with_alternate)
+            patched = patcher.apply_patch_bytes(bytes(alternate), analysis)
+            backup_dir = root / "backup"
+            patcher.create_backup(backup_dir, manifest, [analysis], {"main": patcher.sha256_bytes(patched)})
+            target_path.write_bytes(patched)
+            patcher.command_rollback(backup_dir, manifest, checker=lambda targets: [], enforce_topology=False)
+            self.assertEqual(target_path.read_bytes(), bytes(alternate))
+
 
 if __name__ == "__main__":
     unittest.main()
